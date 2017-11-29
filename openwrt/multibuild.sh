@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2013-2016 Luke Dashjr
+# Copyright 2013 Luke Dashjr
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -9,13 +9,10 @@
 set -e
 set -x
 reporoot="$1"  # .../files/bfgminer/BFGMINER_VERSION/openwrt/OPENWRT_VERSION
-openwrt_root="${2:-openwrt-src}"
-BITSTREAM_PKG_PATH="${3}"  # Relative to reporoot
 test -n "$reporoot"
 reporoot="$(realpath "$reporoot")"
 test -n "$reporoot"
-cd "${openwrt_root}/"
-openwrt_root="$PWD"
+cd "openwrt-src/"
 test -d "$reporoot"
 vcfgdir='vanilla_configs'
 vcfglist="$(
@@ -23,6 +20,7 @@ vcfglist="$(
 	 perl -ple 's[.*/][]' |
 	 sort -n
 )"
+BITSTREAM_PKG_PATH='../../../../bitstreams/openwrt/'  # Relative to reporoot
 BITSTREAMS=(
 	fpgaminer_402-1
 	ztex-ufm1_15b1_121126-1
@@ -54,24 +52,15 @@ for cfn in $vcfglist; do
 	yes '' | make oldconfig
 	make {tools,toolchain}/install package/bfgminer/{clean,compile}
 	mkdir "$reporoot/$plat" -pv
-	files=$(ls "bin/$plat/packages/"{*/,}bfgminer*_${plat}*.ipk || true)
-	if test -z "${files}"; then
-		echo "Cannot find built packages"
-		exit 1
-	fi
-	cp -v ${files} "$reporoot/$plat/"
-	if [ -n "${BITSTREAM_PKG_PATH}" ]; then
+	cp -v "bin/$plat/packages/"bfgminer*_${plat}.ipk "$reporoot/$plat/"
+	if [ -d "$reporoot/${BITSTREAM_PKG_PATH}" ]; then
 	(
-		test -d "$reporoot/${BITSTREAM_PKG_PATH}"
 		cd "$reporoot/$plat"
 		for bs in ${BITSTREAMS[@]}; do
 			ln -vfs "../${BITSTREAM_PKG_PATH}/bitstream-${bs}_all.ipk" .
 		done
 	)
 	fi
-	(
-		cd "$reporoot/$plat/"
-		"${openwrt_root}/scripts/ipkg-make-index.sh" .
-	) > "$reporoot/$plat/Packages"
+	staging_dir/host/bin/ipkg-make-index "$reporoot/$plat/" > "$reporoot/$plat/Packages"
 	gzip -9 < "$reporoot/$plat/Packages" > "$reporoot/$plat/Packages.gz"
 done
